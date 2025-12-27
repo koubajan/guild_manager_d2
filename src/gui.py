@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 from models import Hero, GuildManager
 
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -20,13 +19,13 @@ class App(tk.Tk):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Heroes")
 
-        # Tlacitka
+        # Control buttons
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=10)
         ttk.Button(btn_frame, text="New Hero (Transaction)", command=self.add_hero).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Renew Data", command=self.load_heroes).pack(side=tk.LEFT, padx=5)
 
-        # Tabulka
+        # Data table
         cols = ('ID', 'Name', 'Level', 'Gold', 'Active')
         self.tree = ttk.Treeview(frame, columns=cols, show='headings')
         for col in cols:
@@ -44,7 +43,7 @@ class App(tk.Tk):
         self.report_text.pack(fill='x', padx=10)
 
         ttk.Separator(frame, orient='horizontal').pack(fill='x', pady=10)
-        ttk.Button(frame, text="Impor sample item JSON", command=self.import_json).pack(pady=10)
+        ttk.Button(frame, text="Import sample item JSON", command=self.import_json).pack(pady=10)
 
     def create_settings_tab(self):
         frame = ttk.Frame(self.notebook)
@@ -52,7 +51,7 @@ class App(tk.Tk):
         ttk.Label(frame, text="Config file: config.json located in root folder.").pack(pady=20)
 
     def load_heroes(self):
-        # Nacte hrdiny z DB do tabulky
+        # Loads heroes from DB to table
         try:
             for i in self.tree.get_children():
                 self.tree.delete(i)
@@ -63,7 +62,7 @@ class App(tk.Tk):
             messagebox.showerror("DB err:", str(e))
 
     def add_hero(self):
-        # Dialog pro noveho hrdinu
+        # Input dialog for new hero
         name = simpledialog.askstring("New Hero", "Name:")
         if name:
             try:
@@ -71,10 +70,10 @@ class App(tk.Tk):
                 messagebox.showinfo("OK", "Hero created!")
                 self.load_heroes()
             except Exception as e:
-                messagebox.showerror("Chyba", str(e))
+                messagebox.showerror("Error", str(e))
 
     def show_report(self):
-        # Zobrazi agregovany report
+        # Displays aggregated report
         try:
             data = GuildManager.get_report()
             self.report_text.delete(1.0, tk.END)
@@ -86,7 +85,7 @@ class App(tk.Tk):
             messagebox.showerror("Err", str(e))
 
     def import_json(self):
-        # Import itemu ze souboru
+        # Imports items from file
         file_path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if file_path:
             try:

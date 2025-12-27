@@ -9,21 +9,21 @@ class Database:
     @staticmethod
     def get_connection():
         if Database._instance is None:
-            # Najde cestu k root slozce (o uroven vys nez tento skript)
+            # Finds path to root folder (one level up from src)
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             config_path = os.path.join(base_dir, 'config.json')
 
             if not os.path.exists(config_path):
-                raise FileNotFoundError(f"Chybi 'config.json' v root slozce: {base_dir}")
+                raise FileNotFoundError(f"Missing 'config.json' in root: {base_dir}")
 
             try:
                 with open(config_path, 'r') as f:
                     config = json.load(f)
                 Database._instance = mysql.connector.connect(**config)
             except Exception as e:
-                raise ConnectionError(f"Chyba pripojeni: {e}")
+                raise ConnectionError(f"Connection error: {e}")
 
-        # Reconnect, pokud spojeni spadlo
+        # Reconnect if connection was lost
         if not Database._instance.is_connected():
             Database._instance.reconnect(attempts=3, delay=0)
 
@@ -32,7 +32,7 @@ class Database:
     @staticmethod
     def execute_query(query, params=None):
         conn = Database.get_connection()
-        # Vrati data jako slovnik
+        # Returns data as dictionary
         cursor = conn.cursor(dictionary=True)
         try:
             cursor.execute(query, params or ())
@@ -40,9 +40,9 @@ class Database:
                 return cursor.fetchall()
             else:
                 conn.commit()
-                return cursor.lastrowid  # Vrati ID noveho radku
+                return cursor.lastrowid  # Returns ID of the new row
         except Exception as e:
-            conn.rollback()  # Vrati zmeny zpet pri chybe
+            conn.rollback()  # Revert changes on error
             raise e
         finally:
             cursor.close()

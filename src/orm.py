@@ -6,7 +6,7 @@ class ActiveRecord:
     pk = "id"
 
     def __init__(self, **kwargs):
-        # Nastavi atributy objektu podle sloupcu v DB
+        # Sets object attributes based on DB columns
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -15,7 +15,7 @@ class ActiveRecord:
         pk_val = data.get(self.pk)
 
         if pk_val:
-            # UPDATE (pokud ma ID)
+            # UPDATE (if ID exists)
             set_clause = ", ".join([f"{k}=%s" for k in data.keys() if k != self.pk])
             values = list(data.values())
             values.remove(pk_val)
@@ -24,7 +24,7 @@ class ActiveRecord:
             sql = f"UPDATE {self.table} SET {set_clause} WHERE {self.pk}=%s"
             Database.execute_query(sql, tuple(values))
         else:
-            # INSERT (pokud nema ID)
+            # INSERT (if no ID)
             cols = ", ".join(data.keys())
             placeholders = ", ".join(["%s"] * len(data))
             sql = f"INSERT INTO {self.table} ({cols}) VALUES ({placeholders})"
@@ -33,7 +33,7 @@ class ActiveRecord:
 
     @classmethod
     def all(cls):
-        # Vrati vsechny zaznamy jako objekty
+        # Returns all records as objects
         sql = f"SELECT * FROM {cls.table}"
         rows = Database.execute_query(sql)
         return [cls(**row) for row in rows]

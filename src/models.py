@@ -13,41 +13,43 @@ class Item(ActiveRecord):
 class GuildManager:
     @staticmethod
     def create_hero_with_starter_pack(name, class_id):
-        # TRANSAKCE: Vytvori hrdinu a da mu prvni item
         conn = Database.get_connection()
+
+        # Safety: rollback any stuck transaction
         try:
-            # Pro jistotu zrusime jakoukoliv visici transakci z minula
             conn.rollback()
         except:
             pass
+
+        # TRANSACTION: Creates hero and gives first item
         conn.start_transaction()
         try:
             cursor = conn.cursor()
 
-            # 1. Vytvor hrdinu
+            # 1. Create hero
             cursor.execute("INSERT INTO heroes (name, class_id, gold_balance, level) VALUES (%s, %s, 100.0, 1)",
                            (name, class_id))
             hero_id = cursor.lastrowid
 
-            # 2. Najdi startovni item
+            # 2. Find starter item
             cursor.execute("SELECT id FROM items LIMIT 1")
             item = cursor.fetchone()
 
             if item:
-                # 3. Pridej do inventare (vazba M:N)
+                # 3. Add to inventory (M:N relation)
                 cursor.execute("INSERT INTO inventory (hero_id, item_id, quantity) VALUES (%s, %s, 1)",
                                (hero_id, item[0]))
 
-            conn.commit()  # Potvrdit zmeny
+            conn.commit()  # Confirm changes
             cursor.close()
             return hero_id
         except Exception as e:
-            conn.rollback()  # Zrusit pri chybe
+            conn.rollback()  # Revert on error
             raise e
 
     @staticmethod
     def get_report():
-        # Agregace dat (SUM, COUNT) pro report
+        # Data aggregation (SUM, COUNT) for report
         sql = """
             SELECT h.name, h.level, COUNT(inv.id) as item_count, SUM(i.value) as total_value
             FROM heroes h
@@ -59,7 +61,7 @@ class GuildManager:
 
     @staticmethod
     def import_items_from_json(json_data):
-        # Import dat z JSONu
+        # Import data from JSON
         import json
         items_list = json.loads(json_data)
         count = 0

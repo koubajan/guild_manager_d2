@@ -2,8 +2,8 @@ from gui import App
 
 if __name__ == "__main__":
     try:
-        # Spusti GUI aplikaci
+        # Run GUI application
         app = App()
         app.mainloop()
     except Exception as e:
-        print(f"Fatal Err: {e}")
+        print(f"Critical error: {e}")
