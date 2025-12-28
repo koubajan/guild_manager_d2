@@ -2,11 +2,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from models import Hero, GuildManager
 
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Guild Master - D2")
-        self.geometry("800x600")
+        self.geometry("900x600")
 
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill='both', expand=True)
@@ -22,14 +23,19 @@ class App(tk.Tk):
         # Control buttons
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="New Hero (Transaction)", command=self.add_hero).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Renew Data", command=self.load_heroes).pack(side=tk.LEFT, padx=5)
 
-        # Data table
+        ttk.Button(btn_frame, text="New Hero", command=self.add_hero).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Edit Stats", command=self.edit_hero).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete Hero", command=self.delete_hero).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Refresh Table", command=self.load_heroes).pack(side=tk.LEFT, padx=5)
+
+        # Data table configuration
         cols = ('ID', 'Name', 'Level', 'Gold', 'Active')
         self.tree = ttk.Treeview(frame, columns=cols, show='headings')
         for col in cols:
             self.tree.heading(col, text=col)
+            self.tree.column(col, width=100)
+
         self.tree.pack(fill='both', expand=True)
 
         self.load_heroes()
@@ -51,7 +57,7 @@ class App(tk.Tk):
         ttk.Label(frame, text="Config file: config.json located in root folder.").pack(pady=20)
 
     def load_heroes(self):
-        # Loads heroes from DB to table
+        # Reloads data from DB
         try:
             for i in self.tree.get_children():
                 self.tree.delete(i)
@@ -59,58 +65,107 @@ class App(tk.Tk):
             for h in heroes:
                 self.tree.insert('', 'end', values=(h.id, h.name, h.level, h.gold_balance, h.is_active))
         except Exception as e:
-            messagebox.showerror("DB err:", str(e))
+            messagebox.showerror("DB Error", str(e))
+
+    def get_selected_hero_id(self):
+        # Helper to get ID of the selected row
+        selected_item = self.tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select a hero first!")
+            return None
+        return self.tree.item(selected_item)['values'][0]
 
     def add_hero(self):
-        # Custom window for inputting Name, Level, and Gold
+        # Dialog for creating a new hero
         popup = tk.Toplevel(self)
-        popup.title("New Hero Details")
+        popup.title("New Hero")
         popup.geometry("300x250")
 
-        # 1. Name Input
-        tk.Label(popup, text="Hero Name:").pack(pady=5)
+        tk.Label(popup, text="Name:").pack(pady=5)
         entry_name = tk.Entry(popup)
         entry_name.pack(pady=5)
 
-        # 2. Level Input
-        tk.Label(popup, text="Level (1-100):").pack(pady=5)
+        tk.Label(popup, text="Level:").pack(pady=5)
         entry_level = tk.Entry(popup)
-        entry_level.insert(0, "1") # Default value
+        entry_level.insert(0, "1")
         entry_level.pack(pady=5)
 
-        # 3. Gold Input
-        tk.Label(popup, text="Starting Gold:").pack(pady=5)
+        tk.Label(popup, text="Gold:").pack(pady=5)
         entry_gold = tk.Entry(popup)
-        entry_gold.insert(0, "100.0") # Default value
+        entry_gold.insert(0, "100.0")
         entry_gold.pack(pady=5)
 
-        # Save Function
         def submit():
             name = entry_name.get()
-            level = entry_level.get()
+            lvl = entry_level.get()
             gold = entry_gold.get()
-
             if name:
                 try:
-                    # Calls the updated model method with 4 arguments
-                    GuildManager.create_hero_with_starter_pack(name, 1, level, gold)
-                    messagebox.showinfo("OK", "Hero created successfully!")
-                    popup.destroy() # Close popup
-                    self.load_heroes() # Refresh table
+                    GuildManager.create_hero_with_starter_pack(name, 1, lvl, gold)
+                    messagebox.showinfo("Success", "Hero created!")
+                    popup.destroy()
+                    self.load_heroes()
                 except Exception as e:
                     messagebox.showerror("Error", str(e))
-            else:
-                messagebox.showwarning("Warning", "Name is required!")
 
-        # Confirm Button
-        tk.Button(popup, text="Create Hero", command=submit).pack(pady=20)
+        tk.Button(popup, text="Create", command=submit).pack(pady=20)
+
+    def delete_hero(self):
+        # Deletes selected hero
+        hero_id = self.get_selected_hero_id()
+        if hero_id:
+            confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this hero?")
+            if confirm:
+                try:
+                    GuildManager.delete_hero(hero_id)
+                    messagebox.showinfo("Deleted", "Hero deleted successfully.")
+                    self.load_heroes()
+                except Exception as e:
+                    messagebox.showerror("Error", str(e))
+
+    def edit_hero(self):
+        # Edits selected hero stats
+        hero_id = self.get_selected_hero_id()
+        if not hero_id:
+            return
+
+        # Get current values from the table
+        selected_values = self.tree.item(self.tree.selection())['values']
+        current_name = selected_values[1]
+        current_level = selected_values[2]
+        current_gold = selected_values[3]
+
+        popup = tk.Toplevel(self)
+        popup.title(f"Edit Hero: {current_name}")
+        popup.geometry("300x200")
+
+        tk.Label(popup, text="New Level:").pack(pady=5)
+        entry_level = tk.Entry(popup)
+        entry_level.insert(0, str(current_level))
+        entry_level.pack(pady=5)
+
+        tk.Label(popup, text="New Gold Balance:").pack(pady=5)
+        entry_gold = tk.Entry(popup)
+        entry_gold.insert(0, str(current_gold))
+        entry_gold.pack(pady=5)
+
+        def submit_update():
+            try:
+                GuildManager.update_hero_stats(hero_id, entry_level.get(), entry_gold.get())
+                messagebox.showinfo("Success", "Hero updated!")
+                popup.destroy()
+                self.load_heroes()
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+
+        tk.Button(popup, text="Save Changes", command=submit_update).pack(pady=20)
 
     def show_report(self):
-        # Displays aggregated report
+        # Shows aggregated report
         try:
             data = GuildManager.get_report()
             self.report_text.delete(1.0, tk.END)
-            self.report_text.insert(tk.END, "Name | Level | Number of Items | Value\n" + "-" * 40 + "\n")
+            self.report_text.insert(tk.END, "Name | Level | Items | Value\n" + "-" * 40 + "\n")
             for row in data:
                 self.report_text.insert(tk.END,
                                         f"{row['name']} | {row['level']} | {row['item_count']} | {row['total_value']}\n")
@@ -118,7 +173,7 @@ class App(tk.Tk):
             messagebox.showerror("Err", str(e))
 
     def import_json(self):
-        # Imports items from file
+        # Imports items from JSON file
         file_path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if file_path:
             try:

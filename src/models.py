@@ -21,7 +21,7 @@ class GuildManager:
         except:
             pass
 
-        # TRANSACTION: Creates hero and gives first item
+        # Transaction start
         conn.start_transaction()
         try:
             cursor = conn.cursor()
@@ -29,7 +29,6 @@ class GuildManager:
             # 1. Create hero with custom Level and Gold
             sql = "INSERT INTO heroes (name, class_id, gold_balance, level) VALUES (%s, %s, %s, %s)"
             cursor.execute(sql, (name, class_id, float(gold), int(level)))
-
             hero_id = cursor.lastrowid
 
             # 2. Find starter item
@@ -37,20 +36,32 @@ class GuildManager:
             item = cursor.fetchone()
 
             if item:
-                # 3. Add to inventory (M:N relation)
+                # 3. Add to inventory
                 cursor.execute("INSERT INTO inventory (hero_id, item_id, quantity) VALUES (%s, %s, 1)",
                                (hero_id, item[0]))
 
-            conn.commit()  # Confirm changes
+            conn.commit()
             cursor.close()
             return hero_id
         except Exception as e:
-            conn.rollback()  # Revert on error
+            conn.rollback()
             raise e
 
     @staticmethod
+    def update_hero_stats(hero_id, new_level, new_gold):
+        # Updates specific hero stats
+        sql = "UPDATE heroes SET level = %s, gold_balance = %s WHERE id = %s"
+        Database.execute_query(sql, (int(new_level), float(new_gold), hero_id))
+
+    @staticmethod
+    def delete_hero(hero_id):
+        # Deletes hero (Inventory is removed automatically via CASCADE in DB)
+        sql = "DELETE FROM heroes WHERE id = %s"
+        Database.execute_query(sql, (hero_id,))
+
+    @staticmethod
     def get_report():
-        # Data aggregation (SUM, COUNT) for report
+        # Aggregates data for the report
         sql = """
             SELECT h.name, h.level, COUNT(inv.id) as item_count, SUM(i.value) as total_value
             FROM heroes h
@@ -62,7 +73,7 @@ class GuildManager:
 
     @staticmethod
     def import_items_from_json(json_data):
-        # Import data from JSON
+        # Imports items from JSON string
         import json
         items_list = json.loads(json_data)
         count = 0
