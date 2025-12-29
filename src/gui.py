@@ -9,7 +9,6 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        # Load config to fill the Settings tab later
         self.config_data = self.load_config_data()
 
         self.title("Guild Master - D2")
@@ -23,7 +22,6 @@ class App(tk.Tk):
         self.create_settings_tab()
 
     def load_config_data(self):
-        # Helper to read raw JSON config safely
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = os.path.join(base_dir, 'config.json')
         if os.path.exists(config_path):
@@ -38,7 +36,6 @@ class App(tk.Tk):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Heroes")
 
-        # Control buttons
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=10)
 
@@ -47,7 +44,6 @@ class App(tk.Tk):
         ttk.Button(btn_frame, text="Delete Hero", command=self.delete_hero).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Refresh Table", command=self.load_heroes).pack(side=tk.LEFT, padx=5)
 
-        # Data table configuration
         cols = ('ID', 'Name', 'Level', 'Gold', 'Active')
         self.tree = ttk.Treeview(frame, columns=cols, show='headings')
         for col in cols:
@@ -63,22 +59,19 @@ class App(tk.Tk):
         self.notebook.add(frame, text="Report & Import")
 
         ttk.Button(frame, text="Generate Report", command=self.show_report).pack(pady=10)
-        self.report_text = tk.Text(frame, height=15)
+        self.report_text = tk.Text(frame, height=20)
         self.report_text.pack(fill='x', padx=10)
 
         ttk.Separator(frame, orient='horizontal').pack(fill='x', pady=10)
         ttk.Button(frame, text="Import sample item JSON", command=self.import_json).pack(pady=10)
 
     def create_settings_tab(self):
-        # EDITABLE CONFIGURATION TAB
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Settings")
 
         tk.Label(frame, text="Database Configuration (config.json)", font=("Arial", 12, "bold")).pack(pady=15)
 
-        # Form fields
         self.entries = {}
-        # Only DB connection fields
         fields = ["host", "user", "password", "database"]
 
         for field in fields:
@@ -87,22 +80,18 @@ class App(tk.Tk):
             tk.Label(row, text=f"{field.upper()}:", width=15, anchor='w').pack(side=tk.LEFT)
 
             entry = tk.Entry(row)
-            # Fill with current config data
             entry.insert(0, str(self.config_data.get(field, "")))
             entry.pack(side=tk.LEFT, fill='x', expand=True)
 
-            # Hide password characters
             if "password" in field:
                 entry.config(show="*")
 
             self.entries[field] = entry
 
-        # Save Button
         ttk.Button(frame, text="Save Configuration", command=self.save_config).pack(pady=20)
         tk.Label(frame, text="Note: Restart application after saving changes.", fg="red").pack()
 
     def save_config(self):
-        # Saves new settings to config.json
         new_config = {field: entry.get() for field, entry in self.entries.items()}
 
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -215,12 +204,28 @@ class App(tk.Tk):
 
     def show_report(self):
         try:
+            # 1. Per-hero report
             data = GuildManager.get_report()
             self.report_text.delete(1.0, tk.END)
-            self.report_text.insert(tk.END, "Name | Level | Items | Value\n" + "-" * 40 + "\n")
+            # UPDATED HEADER: Added Gold and renamed Value to Items Value
+            self.report_text.insert(tk.END, "Name | Level | Gold | Items | Items Value\n" + "-" * 55 + "\n")
+
             for row in data:
+                # Handle None values (e.g. if hero has no items)
+                val = row['items_value'] if row['items_value'] is not None else 0.0
+
+                # UPDATED ROW: Added row['gold_balance']
                 self.report_text.insert(tk.END,
-                                        f"{row['name']} | {row['level']} | {row['item_count']} | {row['total_value']}\n")
+                                        f"{row['name']} | {row['level']} | {row['gold_balance']} | {row['item_count']} | {val}\n")
+
+            # 2. Guild summary
+            stats = GuildManager.get_guild_stats()
+            self.report_text.insert(tk.END, "\n" + "=" * 55 + "\n")
+            self.report_text.insert(tk.END, "GUILD TOTAL STATISTICS\n")
+            self.report_text.insert(tk.END, f"Total Guild Items Value: {stats['guild_item_value']}\n")
+            self.report_text.insert(tk.END, f"Average Hero Level:      {stats['avg_level']:.1f}\n")
+            self.report_text.insert(tk.END, f"Average Gold per Hero:   {stats['avg_gold']:.1f}\n")
+
         except Exception as e:
             messagebox.showerror("Err", str(e))
 
