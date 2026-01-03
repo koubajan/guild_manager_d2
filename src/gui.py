@@ -18,7 +18,7 @@ class App(tk.Tk):
         self.notebook.pack(fill='both', expand=True)
 
         self.create_hero_tab()
-        self.create_items_tab()  # NEW TAB
+        self.create_items_tab()
         self.create_report_tab()
         self.create_settings_tab()
 
@@ -30,7 +30,7 @@ class App(tk.Tk):
                 with open(config_path, 'r') as f:
                     return json.load(f)
             except:
-                return {}
+                return {}  # Return empty if broken, user can fix in Settings
         return {}
 
     # --- HEROES TAB ---
@@ -56,7 +56,7 @@ class App(tk.Tk):
         self.tree.pack(fill='both', expand=True)
         self.load_heroes()
 
-    # --- ITEMS TAB (NEW) ---
+    # --- ITEMS TAB ---
     def create_items_tab(self):
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Items DB")
@@ -127,10 +127,18 @@ class App(tk.Tk):
         ttk.Button(frame, text="Save Configuration", command=self.save_config).pack(pady=20)
         tk.Label(frame, text="Note: Restart application after saving changes.", fg="red").pack()
 
-    # --- LOGIC & ACTIONS ---
+    # --- LOGIC ---
 
     def save_config(self):
-        new_config = {field: entry.get() for field, entry in self.entries.items()}
+        # Validation: Check if inputs are empty
+        new_config = {}
+        for field, entry in self.entries.items():
+            val = entry.get().strip()
+            if not val and field != "password":  # Password can be empty in some setups
+                messagebox.showwarning("Input Error", f"Field '{field}' cannot be empty!")
+                return
+            new_config[field] = val
+
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = os.path.join(base_dir, 'config.json')
         try:
@@ -138,30 +146,27 @@ class App(tk.Tk):
                 json.dump(new_config, f, indent=4)
             messagebox.showinfo("Success", "Configuration saved!\nPlease restart.")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Config Error", str(e))
 
     def load_heroes(self):
         try:
-            for i in self.tree.get_children():
-                self.tree.delete(i)
+            for i in self.tree.get_children(): self.tree.delete(i)
             heroes = Hero.all()
             for h in heroes:
                 self.tree.insert('', 'end', values=(h.id, h.name, h.level, h.gold_balance, h.is_active))
         except Exception as e:
-            messagebox.showerror("DB Error", str(e))
+            messagebox.showerror("DB Error", f"Failed to load heroes.\n{e}")
 
     def load_items(self):
         try:
-            for i in self.item_tree.get_children():
-                self.item_tree.delete(i)
+            for i in self.item_tree.get_children(): self.item_tree.delete(i)
             items = Item.all()
             for item in items:
                 self.item_tree.insert('', 'end', values=(item.id, item.name, item.rarity, item.value))
         except Exception as e:
-            messagebox.showerror("DB Error", str(e))
+            messagebox.showerror("DB Error", f"Failed to load items.\n{e}")
 
     def add_hero(self):
-        # Enhanced hero creation with Starter Item Dropdown
         popup = tk.Toplevel(self)
         popup.title("New Hero")
         popup.geometry("350x350")
@@ -171,82 +176,79 @@ class App(tk.Tk):
         entry_name.pack(pady=5)
 
         tk.Label(popup, text="Level:").pack(pady=5)
-        entry_level = tk.Entry(popup)
-        entry_level.insert(0, "1")
+        entry_level = tk.Entry(popup);
+        entry_level.insert(0, "1");
         entry_level.pack(pady=5)
 
         tk.Label(popup, text="Gold:").pack(pady=5)
-        entry_gold = tk.Entry(popup)
-        entry_gold.insert(0, "100.0")
+        entry_gold = tk.Entry(popup);
+        entry_gold.insert(0, "100.0");
         entry_gold.pack(pady=5)
 
-        # Starter Item Selection
         tk.Label(popup, text="Starter Item:").pack(pady=5)
-
-        # Load available items for the dropdown
         try:
             all_items = Item.all()
             item_options = [f"{i.id}: {i.name} ({i.rarity})" for i in all_items]
         except:
             item_options = []
-
         combo_items = ttk.Combobox(popup, values=item_options, state="readonly")
         combo_items.pack(pady=5)
 
         def submit():
-            name = entry_name.get()
-            lvl = entry_level.get()
-            gold = entry_gold.get()
+            # VALIDATION
+            name = entry_name.get().strip()
+            if not name:
+                messagebox.showwarning("Input Error", "Name cannot be empty!")
+                return
 
-            # Parse selected item ID
+            try:
+                lvl = int(entry_level.get())
+                gold = float(entry_gold.get())
+            except ValueError:
+                messagebox.showerror("Input Error", "Level must be INT and Gold must be NUMBER!")
+                return
+
+            # Get Item
             selected_str = combo_items.get()
-            item_id = None
-            if selected_str:
-                item_id = int(selected_str.split(":")[0])
+            item_id = int(selected_str.split(":")[0]) if selected_str else None
 
-            if name:
-                try:
-                    GuildManager.create_hero_with_starter_pack(name, 1, lvl, gold, item_id)
-                    messagebox.showinfo("Success", "Hero created!")
-                    popup.destroy()
-                    self.load_heroes()
-                except Exception as e:
-                    messagebox.showerror("Error", str(e))
+            try:
+                GuildManager.create_hero_with_starter_pack(name, 1, lvl, gold, item_id)
+                messagebox.showinfo("Success", "Hero created!")
+                popup.destroy()
+                self.load_heroes()
+            except Exception as e:
+                messagebox.showerror("Database Error", str(e))
 
         tk.Button(popup, text="Create", command=submit).pack(pady=20)
 
     def view_inventory(self):
-        # Enhanced Inventory Manager
         hero_id = self.get_selected_id(self.tree)
         if not hero_id: return
-
         hero_name = self.tree.item(self.tree.selection())['values'][1]
 
         popup = tk.Toplevel(self)
         popup.title(f"Inventory: {hero_name}")
         popup.geometry("500x400")
 
-        # Inventory Table
         cols = ('InvID', 'Name', 'Rarity', 'Value')
         inv_tree = ttk.Treeview(popup, columns=cols, show='headings')
-        for c in cols:
-            inv_tree.heading(c, text=c)
-            inv_tree.column(c, width=80)
+        for c in cols: inv_tree.heading(c, text=c); inv_tree.column(c, width=80)
         inv_tree.pack(fill='both', expand=True, pady=10)
 
         def refresh_inv():
             for i in inv_tree.get_children(): inv_tree.delete(i)
-            items = GuildManager.get_hero_inventory(hero_id)
-            for i in items:
-                inv_tree.insert('', 'end', values=(i['inv_id'], i['name'], i['rarity'], i['value']))
+            try:
+                items = GuildManager.get_hero_inventory(hero_id)
+                for i in items: inv_tree.insert('', 'end', values=(i['inv_id'], i['name'], i['rarity'], i['value']))
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
 
         refresh_inv()
 
-        # Action Buttons
-        ctrl_frame = ttk.Frame(popup)
+        ctrl_frame = ttk.Frame(popup);
         ctrl_frame.pack(pady=10)
 
-        # Dropdown to add new item
         try:
             all_items = Item.all()
             item_opts = [f"{i.id}: {i.name}" for i in all_items]
@@ -263,7 +265,7 @@ class App(tk.Tk):
                 try:
                     GuildManager.add_item_to_inventory(hero_id, i_id)
                     refresh_inv()
-                    self.show_report()  # update report in background
+                    self.show_report()
                 except Exception as e:
                     messagebox.showerror("Error", str(e))
 
@@ -271,8 +273,10 @@ class App(tk.Tk):
 
         def remove_item():
             sel_item = inv_tree.selection()
-            if not sel_item: return
-            inv_id = inv_tree.item(sel_item)['values'][0]  # Get InvID
+            if not sel_item:
+                messagebox.showwarning("Warning", "Select an item to remove.")
+                return
+            inv_id = inv_tree.item(sel_item)['values'][0]
             try:
                 GuildManager.remove_item_from_inventory(inv_id)
                 refresh_inv()
@@ -281,23 +285,34 @@ class App(tk.Tk):
 
         ttk.Button(ctrl_frame, text="Remove Selected", command=remove_item).pack(side=tk.LEFT, padx=20)
 
-    # --- CRUD FOR ITEMS DB ---
+    # --- ITEM ACTIONS ---
     def add_item_to_db(self):
+        # Validation for Item creation
         name = simpledialog.askstring("New Item", "Item Name:")
-        if name:
-            try:
-                GuildManager.create_item(name, "Common", 10.0)
-                self.load_items()
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
+        if not name or name.strip() == "":
+            messagebox.showwarning("Error", "Name required.")
+            return
+
+        # Simple inputs for rarity/value
+        val_str = simpledialog.askstring("New Item", "Value (Number):")
+        try:
+            val = float(val_str)
+        except:
+            messagebox.showerror("Error", "Value must be a number.")
+            return
+
+        try:
+            GuildManager.create_item(name, "Common", val)
+            self.load_items()
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
     def edit_item_in_db(self):
         item_id = self.get_selected_id(self.item_tree)
         if not item_id: return
 
         vals = self.item_tree.item(self.item_tree.selection())['values']
-
-        popup = tk.Toplevel(self)
+        popup = tk.Toplevel(self);
         popup.title("Edit Item")
 
         tk.Label(popup, text="Name:").pack()
@@ -316,8 +331,18 @@ class App(tk.Tk):
         e_val.pack()
 
         def save():
+            # VALIDATION
+            if not e_name.get().strip():
+                messagebox.showwarning("Error", "Name cannot be empty.")
+                return
             try:
-                GuildManager.update_item(item_id, e_name.get(), e_rar.get(), e_val.get())
+                v = float(e_val.get())
+            except ValueError:
+                messagebox.showerror("Error", "Value must be a number.")
+                return
+
+            try:
+                GuildManager.update_item(item_id, e_name.get(), e_rar.get(), v)
                 popup.destroy()
                 self.load_items()
             except Exception as e:
@@ -328,7 +353,7 @@ class App(tk.Tk):
     def delete_item_from_db(self):
         item_id = self.get_selected_id(self.item_tree)
         if item_id:
-            if messagebox.askyesno("Confirm", "Delete this item from the shop?"):
+            if messagebox.askyesno("Confirm", "Delete this item? Warning: May cause errors if owned by heroes."):
                 try:
                     GuildManager.delete_item(item_id)
                     self.load_items()
@@ -369,9 +394,16 @@ class App(tk.Tk):
         eg.pack()
 
         def save():
-            GuildManager.update_hero_stats(hero_id, el.get(), eg.get())
-            popup.destroy()
-            self.load_heroes()
+            try:
+                lvl = int(el.get())
+                gold = float(eg.get())
+                GuildManager.update_hero_stats(hero_id, lvl, gold)
+                popup.destroy()
+                self.load_heroes()
+            except ValueError:
+                messagebox.showerror("Error", "Invalid inputs.")
+            except Exception as e:
+                messagebox.showerror("DB Error", str(e))
 
         tk.Button(popup, text="Save", command=save).pack(pady=10)
 
@@ -396,13 +428,21 @@ class App(tk.Tk):
     def import_json_items(self):
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if path:
-            with open(path, 'r') as f: c = GuildManager.import_items_from_json(f.read())
-            messagebox.showinfo("Import", f"Imported {c} items.");
-            self.load_items()
+            try:
+                with open(path, 'r') as f:
+                    c = GuildManager.import_items_from_json(f.read())
+                messagebox.showinfo("Import", f"Imported {c} items.");
+                self.load_items()
+            except Exception as e:
+                messagebox.showerror("Import Error", f"Bad JSON format.\n{e}")
 
     def import_json_heroes(self):
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if path:
-            with open(path, 'r') as f: c = GuildManager.import_heroes_from_json(f.read())
-            messagebox.showinfo("Import", f"Imported {c} heroes.");
-            self.load_heroes()
+            try:
+                with open(path, 'r') as f:
+                    c = GuildManager.import_heroes_from_json(f.read())
+                messagebox.showinfo("Import", f"Imported {c} heroes.");
+                self.load_heroes()
+            except Exception as e:
+                messagebox.showerror("Import Error", f"Bad JSON format.\n{e}")

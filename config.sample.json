@@ -1,6 +1,6 @@
 {
     "host": "localhost",
-    "user": "root",
-    "password": "",
+    "user": "user",
+    "password": "password",
     "database": "guild_master_db"
 }

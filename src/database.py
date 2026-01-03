@@ -9,40 +9,73 @@ class Database:
     @staticmethod
     def get_connection():
         if Database._instance is None:
-            # Finds path to root folder (one level up from src)
+            # 1. Find config file
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             config_path = os.path.join(base_dir, 'config.json')
 
             if not os.path.exists(config_path):
-                raise FileNotFoundError(f"Missing 'config.json' in root: {base_dir}")
+                raise FileNotFoundError(f"Missing 'config.json' in: {base_dir}")
 
+            # 2. Load and VALIDATE config
             try:
                 with open(config_path, 'r') as f:
                     config = json.load(f)
-                Database._instance = mysql.connector.connect(**config)
-            except Exception as e:
-                raise ConnectionError(f"Connection error: {e}")
 
-        # Reconnect if connection was lost
-        if not Database._instance.is_connected():
-            Database._instance.reconnect(attempts=3, delay=0)
+                # Check for required keys
+                required_keys = ["host", "user", "password", "database"]
+                for key in required_keys:
+                    if key not in config:
+                        raise ValueError(f"Config is missing required key: '{key}'")
+
+                Database._instance = mysql.connector.connect(**config)
+
+            except json.JSONDecodeError:
+                raise ValueError("Config file is not valid JSON! Check for missing commas or quotes.")
+            except mysql.connector.Error as err:
+                # Handle specific DB errors
+                if err.errno == 2003:
+                    raise ConnectionError("Cannot connect to MySQL Server. Is it running?")
+                elif err.errno == 1045:
+                    raise ConnectionError("Wrong username or password.")
+                elif err.errno == 1049:
+                    raise ConnectionError(f"Database '{config.get('database')}' does not exist.")
+                else:
+                    raise ConnectionError(f"Database Error: {err}")
+            except Exception as e:
+                raise e
+
+        # 3. Reconnect if connection dropped
+        try:
+            if not Database._instance.is_connected():
+                Database._instance.reconnect(attempts=3, delay=0)
+        except Exception:
+            # If reconnect fails, clear instance so we try fresh next time
+            Database._instance = None
+            raise ConnectionError("Lost connection to database and cannot reconnect.")
 
         return Database._instance
 
     @staticmethod
     def execute_query(query, params=None):
-        conn = Database.get_connection()
-        # Returns data as dictionary
-        cursor = conn.cursor(dictionary=True)
         try:
+            conn = Database.get_connection()
+            cursor = conn.cursor(dictionary=True)
             cursor.execute(query, params or ())
+
             if query.strip().upper().startswith("SELECT"):
-                return cursor.fetchall()
+                result = cursor.fetchall()
+                cursor.close()
+                return result
             else:
                 conn.commit()
-                return cursor.lastrowid  # Returns ID of the new row
+                last_id = cursor.lastrowid
+                cursor.close()
+                return last_id
         except Exception as e:
-            conn.rollback()  # Revert changes on error
+            # If query fails, try to rollback just in case
+            try:
+                if Database._instance:
+                    Database._instance.rollback()
+            except:
+                pass
             raise e
-        finally:
-            cursor.close()

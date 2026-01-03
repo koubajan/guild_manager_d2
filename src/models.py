@@ -52,7 +52,7 @@ class GuildManager:
         sql = "DELETE FROM heroes WHERE id = %s"
         Database.execute_query(sql, (hero_id,))
 
-    # --- ITEM MANAGEMENT (CRUD) ---
+    # --- ITEM MANAGEMENT ---
     @staticmethod
     def create_item(name, rarity, value):
         sql = "INSERT INTO items (name, rarity, value) VALUES (%s, %s, %s)"
